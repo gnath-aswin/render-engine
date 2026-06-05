@@ -4,11 +4,10 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
 #include <iostream>
 
-Texture::Texture(const char* imagePath, const std::string& textureType)
-    : ID(0), type(textureType), path(imagePath)
+Texture::Texture(const char* path, const std::string& textureType)
+    : ID(0), type(textureType), path(path)
 {
     glGenTextures(1, &ID);
     glBindTexture(GL_TEXTURE_2D, ID);
@@ -25,7 +24,7 @@ Texture::Texture(const char* imagePath, const std::string& textureType)
 
     stbi_set_flip_vertically_on_load(true);
 
-    unsigned char* data = stbi_load(imagePath, &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
 
     if (data) {
         GLenum format = GL_RGB;
@@ -52,7 +51,7 @@ Texture::Texture(const char* imagePath, const std::string& textureType)
 
         glGenerateMipmap(GL_TEXTURE_2D);
     } else {
-        std::cout << "Failed to load texture: " << imagePath << std::endl;
+        std::cout << "Failed to load texture: " << path << std::endl;
     }
 
     stbi_image_free(data);

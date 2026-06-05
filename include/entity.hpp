@@ -1,17 +1,14 @@
 #pragma once
 #include <memory>
-#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "shader.hpp"
-#include "mesh.hpp"
-#include "texture.hpp"
+#include "model.hpp"
 
 struct RenderObject {
   std::shared_ptr<Shader> shader;
-  std::shared_ptr<Mesh> mesh;
-  const std::vector<std::shared_ptr<Texture>> textures;
+  std::shared_ptr<Model> model;
 };
 
 class Entity{
@@ -24,13 +21,11 @@ class Entity{
     RenderObject renderData; // Reference of mesh, shader and texture to use for the object
 
   public:
-    Entity(std::shared_ptr<Mesh> meshAsset,
-           std::shared_ptr<Shader> shaderAsset,
-           std::vector<std::shared_ptr<Texture>> textures )
+    Entity(std::shared_ptr<Model> meshAsset,
+           std::shared_ptr<Shader> shaderAsset)
         : renderData{
               shaderAsset,
               meshAsset,
-              std::move(textures)
           }{}    
 
     void translate(const glm::vec3& delta){ position = delta; }

@@ -72,7 +72,7 @@ void Window::renderLoop(std::vector<Entity>& objects) {
 
     // Render
     // ------
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Projection matrix(View to clip) 
@@ -88,27 +88,36 @@ void Window::renderLoop(std::vector<Entity>& objects) {
       const RenderObject& renderData = objects[i].getRenderData();
       // Use corresponding shader
       renderData.shader->use();
-      // Setting shader uniform values: texture1, texture2, mix_ratio for each texture
-      for (unsigned int j = 0; j < renderData.textures.size(); ++j) {
-        renderData.textures[j]->bind(j);
-        std::string uniformName = "texture" + std::to_string(j + 1);
-        renderData.shader->setInt(uniformName, j);
+      // In all the mesh in the modle
+      unsigned int diffuseNr = 1;
+      unsigned int specularNr = 1;
+      for (unsigned int k = 0; k < renderData.model->meshes.size(); k++) {
+          auto& mesh = renderData.model->meshes[k];
+
+          unsigned int diffuseNr = 1;
+          unsigned int specularNr = 1;
+
+          for (unsigned int j = 0; j < mesh->textures.size(); ++j) {
+              mesh->textures[j]->bind(j);
+
+              std::string name = mesh->textures[j]->getType();
+              std::string number;
+
+              if (name == "texture_diffuse")
+                  number = std::to_string(diffuseNr++);
+              else if (name == "texture_specular")
+                  number = std::to_string(specularNr++);
+
+              renderData.shader->setInt(name + number, j);
+          }
+
+          renderData.shader->setMat4("model", objects[i].getModelMatrix());
+          renderData.shader->setMat4("view", view);
+          renderData.shader->setMat4("projection", projection);
+
+          mesh->draw();
       }
-      renderData.shader->setFloat("mix_ratio", mixValue);
 
-      // Transformations
-      // Modify model matrix
-      if(i % 2 == 0){objects[i].rotate(glm::vec3(5.0 * glfwGetTime(), 0.0, 10.0 * glfwGetTime()));}
-      else {objects[i].rotate(glm::vec3(5 * glfwGetTime(), 10 * glfwGetTime(), 0.0f));}
-      // Set model matrix: translation and rotation of individual object 
-      renderData.shader->setMat4("model", objects[i].getModelMatrix());
-      // Set camera/view matrix World to view(camera) 
-      renderData.shader->setMat4("view", view);
-      // Projection (View to clip)
-      renderData.shader->setMat4("projection", projection);
-
-      // Draw
-      renderData.mesh->draw();
     }
 
     glfwSwapBuffers(window);

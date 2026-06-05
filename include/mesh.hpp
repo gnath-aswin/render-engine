@@ -1,29 +1,50 @@
 #pragma once
 #include <vector>
+#include <memory>
+#include <glm/glm.hpp>
+#include "texture.hpp"
 
-
-struct VertexAttribute {
-    unsigned int location; // layout location in shader
-    int size;              // number of floats: vec2 = 2, vec3 = 3, vec4 = 4
-    unsigned int offset;   // offset in floats
+#define MAX_BONE_INFLUENCE 4
+struct Vertex {
+  // position
+  glm::vec3 Position;
+  // normal
+  glm::vec3 Normal;
+  // texCoords
+  glm::vec2 TexCoords;
+  // tangent
+  glm::vec3 Tangent;
+  // bitangent
+  glm::vec3 Bitangent;
+	//bone indexes which will influence this vertex
+	int m_BoneIDs[MAX_BONE_INFLUENCE];
+	//weights from each bone
+	float m_Weights[MAX_BONE_INFLUENCE];
 };
 
 class Mesh {
   private:
       unsigned int VAO;
       unsigned int VBO;
-      unsigned int EBO;
       unsigned int texture;
+      unsigned int EBO;
       int vertexCount;
       int indexCount;
 
   public:
-      Mesh(const std::vector<float>& vertices, 
-          const std::vector<unsigned int>& indices,
-          int floatsPerVertex,
-          const std::vector<VertexAttribute>& attributes);
-      ~Mesh();
+    std::vector<Vertex> vertices;
+    std::vector<unsigned int> indices;
+    std::vector<std::shared_ptr<Texture>> textures;
 
-      void draw() const;
+    Mesh(const std::vector<Vertex>& vertices, 
+        const std::vector<unsigned int>& indices,
+        const std::vector<std::shared_ptr<Texture>>& textures);
+    ~Mesh();
+ 
+    // No copy instructions
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+
+    void draw() const;
 };
 
