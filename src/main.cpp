@@ -23,8 +23,8 @@ int main(){
   char fragmentShaderSource[] = "../shaders/trlc_robot.fs";
   auto robotShader= std::make_shared<Shader>(vertexShaderSource, fragmentShaderSource);
   // Gaussian splat
-  char gsVertexShaderSource[] = "../shaders/gaussian/gaussian_quad.vs";
-  char gsFragmentShaderSource[] = "../shaders/gaussian/gaussian_quad.fs";
+  char gsVertexShaderSource[] = "../shaders/gaussian/gaussian_covariance.vs";
+  char gsFragmentShaderSource[] = "../shaders/gaussian/gaussian_covariance.fs";
   auto gaussianShader= std::make_shared<Shader>(gsVertexShaderSource, gsFragmentShaderSource);
 
   
@@ -40,8 +40,8 @@ int main(){
   // Gaussian Splat
   auto gaussianModel = std::make_shared<GaussianSplatModel>(
       "../resources/gaussian/scene.ply",
-      6000000, 
-      2
+      600000, 
+      1
   );
   auto gaussianRoot = std::make_shared<Node>("gaussian_scene");
   gaussianRoot->setGaussianModel(gaussianModel);

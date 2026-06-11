@@ -123,7 +123,9 @@ void Window::drawNode(
     if (node->hasGaussianModel()) {
         shader->setMat4("model", globalTransform, node->getName());
         shader->setFloat("splatSizeMultiplier", 100.0f);
-
+        shader->setFloat("splatExtent", 3.0f);
+        shader->setFloat("opacityScale", 0.5f);
+        shader->setFloat("maxScreenRadius", 0.04f);
         node->getGaussianModel()->draw();
         checkGLError("Gaussian Draw");
     }
