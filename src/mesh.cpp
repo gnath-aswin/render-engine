@@ -1,7 +1,6 @@
 #include <glad/glad.h>
 #include "mesh.hpp"
 #include "texture.hpp"
-#include <iostream>
 #include <memory>
 
 
@@ -69,7 +68,7 @@ Mesh::~Mesh() {
 }
 
 void Mesh::draw() const {
-  std::cout << "Drawing mesh with " << indexCount << " indices\n";
+  // std::cout << "Drawing mesh with " << indexCount << " indices\n";
   // Draw mode: GL_Line or GL_FILL
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
   glBindVertexArray(VAO);

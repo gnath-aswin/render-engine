@@ -2,7 +2,10 @@
 #include "camera.hpp"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
-#include "entity.hpp"
+#include <memory>
+
+#include "scene.hpp"
+#include "node.hpp"
 
 class Window {
 private:
@@ -14,6 +17,7 @@ private:
   Camera camera;
   float lastX;
   float lastY;
+  bool isLeftButtonPressed;
   bool firstMouse;
 
   // timing
@@ -26,11 +30,21 @@ public:
   ~Window();
 
   bool init();
-  void renderLoop(std::vector<Entity>& objects);
+  void renderLoop(Scene& scene);
 
 private:
   void processInput(GLFWwindow *window);
   static void framebuffer_size_callback(GLFWwindow *window, int width, int height);
   static void mouse_callback(GLFWwindow* window, double xpos, double ypos);
   static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+  void drawEntity(
+        const Entity& entity,
+        const glm::mat4& view,
+        const glm::mat4& projection
+    );
+  void drawNode(
+        const std::shared_ptr<Node>& node,
+        const glm::mat4& parentTransform,
+        const std::shared_ptr<Shader>& shader
+    );
 };

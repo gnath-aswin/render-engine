@@ -3,9 +3,23 @@
 #include <iostream>
 #include <math.h>
 #include <glm/glm.hpp>
+#include <memory>
 
 #include "window.hpp"
+#include "scene.hpp"
 #include "entity.hpp"
+#include "node.hpp"
+
+namespace {
+void checkGLError(const std::string& label)
+{
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        std::cout << "OpenGL error after " << label
+                  << ": " << err << std::endl;
+    }
+}
+}
 
 Window::Window(int w, int h, const char *title)
     : window(nullptr), width(w), height(h), title(title),
@@ -13,6 +27,7 @@ Window::Window(int w, int h, const char *title)
       lastX(w / 2.0f),
       lastY(h / 2.0f),
       firstMouse(true),
+      isLeftButtonPressed(false),
       deltaTime(0.0f),
       lastFrame(0.0f),
       mixValue(0.2){}
@@ -53,76 +68,131 @@ bool Window::init() {
 
   // configure global opengl state
   // -----------------------------
+  glEnable(GL_PROGRAM_POINT_SIZE);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_DEPTH_TEST);
 
   return true;
 }
 
-// render loop
-// -----------
-void Window::renderLoop(std::vector<Entity>& objects) {
-  while (!glfwWindowShouldClose(window)) {
-    // per-frame time logic
-    float currentFrame = static_cast<float>(glfwGetTime());
-    deltaTime = currentFrame - lastFrame;
-    lastFrame = currentFrame;
-
-    // Input
-    processInput(window);
-
-    // Render
-    // ------
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // Projection matrix(View to clip) 
-    glm::mat4 projection;
-    projection = glm::perspective(glm::radians(camera.Zoom), (float)width/(float)height, 0.1f, 100.0f);
-
-    // camera/view transformation
-    glm::mat4 view = camera.GetViewMatrix();
-
-    // Render objects
-    for (unsigned int i=0; i < objects.size(); ++i) {
-      // Render data of each object: mesh, shader, texture
-      const RenderObject& renderData = objects[i].getRenderData();
-      // Use corresponding shader
-      renderData.shader->use();
-      // In all the mesh in the modle
-      unsigned int diffuseNr = 1;
-      unsigned int specularNr = 1;
-      for (unsigned int k = 0; k < renderData.model->meshes.size(); k++) {
-          auto& mesh = renderData.model->meshes[k];
-
-          unsigned int diffuseNr = 1;
-          unsigned int specularNr = 1;
-
-          for (unsigned int j = 0; j < mesh->textures.size(); ++j) {
-              mesh->textures[j]->bind(j);
-
-              std::string name = mesh->textures[j]->getType();
-              std::string number;
-
-              if (name == "texture_diffuse")
-                  number = std::to_string(diffuseNr++);
-              else if (name == "texture_specular")
-                  number = std::to_string(specularNr++);
-
-              renderData.shader->setInt(name + number, j);
-          }
-
-          renderData.shader->setMat4("model", objects[i].getModelMatrix());
-          renderData.shader->setMat4("view", view);
-          renderData.shader->setMat4("projection", projection);
-
-          mesh->draw();
-      }
-
+void Window::drawNode(
+    const std::shared_ptr<Node>& node,
+    const glm::mat4& parentTransform,
+    const std::shared_ptr<Shader>& shader
+) {
+    if (!node) {
+        return;
     }
 
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-  }
+    glm::mat4 globalTransform = parentTransform * node->getLocalMatrix();
+
+    if (node->hasModel()) {
+        auto model = node->getModel();
+
+        for (const auto& mesh : model->meshes) {
+            bool hasDiffuse = false;
+
+            unsigned int diffuseNr = 1;
+            unsigned int specularNr = 1;
+
+            for (unsigned int j = 0; j < mesh->textures.size(); ++j) {
+                mesh->textures[j]->bind(j);
+
+                std::string name = mesh->textures[j]->getType();
+                std::string number;
+
+                if (name == "texture_diffuse") {
+                    number = std::to_string(diffuseNr++);
+                    hasDiffuse = true;
+                }
+                else if (name == "texture_specular") {
+                    number = std::to_string(specularNr++);
+                }
+
+                shader->setInt(name + number, j);
+            }
+
+            shader->setBool("hasDiffuseTexture", hasDiffuse);
+            shader->setMat4("model", globalTransform, node->getName());
+
+            mesh->draw();
+        }
+    }
+
+    if (node->hasGaussianModel()) {
+        shader->setMat4("model", globalTransform, node->getName());
+        shader->setFloat("splatSizeMultiplier", 100.0f);
+
+        node->getGaussianModel()->draw();
+        checkGLError("Gaussian Draw");
+    }
+
+    for (const auto& child : node->getChildren()) {
+        drawNode(child, globalTransform, shader);
+    }
+}
+
+void Window::drawEntity(
+    const Entity& entity,
+    const glm::mat4& view,
+    const glm::mat4& projection
+) {
+    auto shader = entity.getShader();
+
+    shader->use();
+
+    shader->setMat4("view", view, entity.getName());
+    shader->setMat4("projection", projection, entity.getName());
+
+    shader->setVec3("baseColor", 0.3f, 0.8f, 0.8f);
+    shader->setVec3("lightPos", 3.0f, 5.0f, 3.0f);
+    shader->setVec3(
+        "viewPos",
+        camera.Position.x,
+        camera.Position.y,
+        camera.Position.z
+    );
+
+    glm::mat4 entityTransform = entity.getModelMatrix();
+
+    drawNode(
+        entity.getRootNode(),
+        entityTransform,
+        shader
+    );
+}
+
+// render loop
+// -----------
+void Window::renderLoop(Scene& scene)
+{
+    while (!glfwWindowShouldClose(window)) {
+        float currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        processInput(window);
+
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glm::mat4 projection = glm::perspective(
+            glm::radians(camera.Zoom),
+            static_cast<float>(width) / static_cast<float>(height),
+            0.1f,
+            100.0f
+        );
+
+        glm::mat4 view = camera.GetViewMatrix();
+
+        for (const Entity& entity : scene.getEntities()) {
+            drawEntity(entity, view, projection);
+        }
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
@@ -133,6 +203,7 @@ void Window::processInput(GLFWwindow *window) {
     glfwSetWindowShouldClose(window, true);
   }
 
+  // Show cursor when its hidden
   if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
   }
@@ -149,13 +220,19 @@ void Window::processInput(GLFWwindow *window) {
 
   // Move camera around
   if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-      camera.ProcessKeyboard(FORWARD, deltaTime);
+    camera.ProcessKeyboard(FORWARD, deltaTime);
   if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-      camera.ProcessKeyboard(BACKWARD, deltaTime);
+    camera.ProcessKeyboard(BACKWARD, deltaTime);
   if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-      camera.ProcessKeyboard(LEFT, deltaTime);
+    camera.ProcessKeyboard(LEFT, deltaTime);
   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-      camera.ProcessKeyboard(RIGHT, deltaTime);
+    camera.ProcessKeyboard(RIGHT, deltaTime);
+  // Look around with mouse left button
+  if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) isLeftButtonPressed = true;
+  if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) {
+    isLeftButtonPressed = false;
+    firstMouse = true;
+  }
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -185,22 +262,24 @@ void Window::mouse_callback(GLFWwindow* glfwWindow, double xposIn, double yposIn
         return;
     }
 
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
+    if(self->isLeftButtonPressed){
+      float xpos = static_cast<float>(xposIn);
+      float ypos = static_cast<float>(yposIn);
 
-    if (self->firstMouse) {
-        self->lastX = xpos;
-        self->lastY = ypos;
-        self->firstMouse = false;
+      if (self->firstMouse) {
+          self->lastX = xpos;
+          self->lastY = ypos;
+          self->firstMouse = false;
+      }
+
+      float xoffset = xpos - self->lastX;
+      float yoffset = self->lastY - ypos;
+
+      self->lastX = xpos;
+      self->lastY = ypos;
+
+      self->camera.ProcessMouseMovement(xoffset, yoffset);
     }
-
-    float xoffset = xpos - self->lastX;
-    float yoffset = self->lastY - ypos;
-
-    self->lastX = xpos;
-    self->lastY = ypos;
-
-    self->camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called

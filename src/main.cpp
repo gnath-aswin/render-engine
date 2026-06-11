@@ -1,12 +1,14 @@
-#include <vector>
 #include <math.h>
 #include <memory>
 #include <glm/gtx/io.hpp>
 
 #include "entity.hpp"
-#include "model.hpp"
+#include "gaussian_splat_model.hpp"
 #include "shader.hpp"
 #include "window.hpp"
+#include "mujoco_robot_loader.hpp"
+
+
 
 int main(){
   // Initialize window first (creates the OpenGL context)
@@ -15,63 +17,49 @@ int main(){
 
 
   // Shader
-  char vertexShaderSource[] = "../shaders/model_loading.vs";
-  char fragmentShaderSource[] = "../shaders/model_loading.fs";
-  auto shader_ptr = std::make_shared<Shader>(vertexShaderSource, fragmentShaderSource);
+  // --------
+  // Robots
+  char vertexShaderSource[] = "../shaders/trlc_robot.vs";
+  char fragmentShaderSource[] = "../shaders/trlc_robot.fs";
+  auto robotShader= std::make_shared<Shader>(vertexShaderSource, fragmentShaderSource);
+  // Gaussian splat
+  char gsVertexShaderSource[] = "../shaders/gaussian/gaussian_quad.vs";
+  char gsFragmentShaderSource[] = "../shaders/gaussian/gaussian_quad.fs";
+  auto gaussianShader= std::make_shared<Shader>(gsVertexShaderSource, gsFragmentShaderSource);
+
   
-  // load models
+  // Entities
   // -----------
-  auto model_ptr = std::make_shared<Model>("../resources/backpack/backpack.obj");
+  // Robot
+  MuJoCoRobotLoader loader;
+  auto robotRoot = loader.load("../resources/humanoid/g1.xml");
+  Entity robotEntity("robot", robotRoot, robotShader);
+  int depth = 0;
+  robotRoot->printTree();
 
-  // Create objects
-  // Mesh
-  // Render Object
-  Entity entity(
-      model_ptr,
-      shader_ptr);
+  // Gaussian Splat
+  auto gaussianModel = std::make_shared<GaussianSplatModel>(
+      "../resources/gaussian/scene.ply",
+      6000000, 
+      2
+  );
+  auto gaussianRoot = std::make_shared<Node>("gaussian_scene");
+  gaussianRoot->setGaussianModel(gaussianModel);
+  Entity gaussianEntity(
+      "gaussian_scene",
+      gaussianRoot,
+      gaussianShader
+  );
+  gaussianEntity.setRotation(glm::vec3(-90, 0, 0));
+  gaussianEntity.setPosition(glm::vec3(0.0f));
+  gaussianEntity.setScale(glm::vec3(1.0f));
 
-  std::vector<Entity> objects;
-  objects.push_back(entity);
 
-  window.renderLoop(objects);
+  // Scene
+  Scene scene;
+  scene.addEntity(robotEntity);
+  scene.addEntity(gaussianEntity);
+  window.renderLoop(scene);
 
   return 0;
 }
-  // Element: Rectangle
-  // std::vector<float> vertices = {
-  //    0.5,  0.5, 0.0,  // top right
-  //    0.5, -0.5, 0.0,  // bottom right
-  //   -0.5, -0.5f, 0.0,  // bottom left
-  //   -0.5,  0.5, 0.0   // top left 
-  // };
-  //
-  // std::vector<int> indices = {  // note that we start from 0!
-  //     0, 1, 3,   // first triangle
-  //     1, 2, 3    // second triangle
-  // };
- 
-  // Two triangles
-  // std::vector<float> vertices1 = {
-  //   -0.5, 0.0, 0.0,
-  //   0.0,0.0, 0.0,
-  //   0.0, 0.5, 0.0};
-  // std::vector<float> vertices2 = {
-  //   0.3, 0.0, 0.0,
-  //   0.3, 0.5, 0.0,
-  //   0.5, 0.0, 0.0
-  // } ;
-
-
-// Element: Rectangle with texture
-  // std::vector<float> vertices = {
-  //   // positions          // colors           // texture coords
-  //    0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
-  //    0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
-  //   -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
-  //   -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
-  // };  
-  //
-  // std::vector<unsigned int> indices = {  
-  //       0, 1, 3, // first triangle
-  //       1, 2, 3  // second triangle
-  //   };
