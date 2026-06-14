@@ -9,6 +9,11 @@
 #include "node.hpp"
 #include "shader.hpp"
 
+enum class RenderType{
+  Mesh,
+  Gaussian
+};
+
 class Entity {
 private:
     std::string name;
@@ -19,6 +24,8 @@ private:
 
     std::shared_ptr<Node> rootNode;
     std::shared_ptr<Shader> shader;
+
+    RenderType renderType = RenderType::Mesh;
 
 public:
     Entity(
@@ -69,4 +76,12 @@ public:
 
         return model;
     }
+
+    void setRenderType(RenderType type) {
+        renderType = type;
+    }
+
+    RenderType getRenderType() const {
+        return renderType;
+}
 };

@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "window.hpp"
+#include "gaussian_splat_model.hpp"
 #include "scene.hpp"
 #include "entity.hpp"
 #include "node.hpp"
@@ -79,6 +80,7 @@ bool Window::init() {
 void Window::drawNode(
     const std::shared_ptr<Node>& node,
     const glm::mat4& parentTransform,
+    const glm::mat4& view,
     const std::shared_ptr<Shader>& shader
 ) {
     if (!node) {
@@ -120,18 +122,8 @@ void Window::drawNode(
         }
     }
 
-    if (node->hasGaussianModel()) {
-        shader->setMat4("model", globalTransform, node->getName());
-        shader->setFloat("splatSizeMultiplier", 100.0f);
-        shader->setFloat("splatExtent", 3.0f);
-        shader->setFloat("opacityScale", 0.5f);
-        shader->setFloat("maxScreenRadius", 0.04f);
-        node->getGaussianModel()->draw();
-        checkGLError("Gaussian Draw");
-    }
-
     for (const auto& child : node->getChildren()) {
-        drawNode(child, globalTransform, shader);
+        drawNode(child, globalTransform, view, shader);
     }
 }
 
@@ -142,25 +134,44 @@ void Window::drawEntity(
 ) {
     auto shader = entity.getShader();
 
+    if (!shader) {
+    std::cout << "ERROR: shader is nullptr for entity "
+              << entity.getName()
+              << std::endl;
+    return;
+    }
+
     shader->use();
 
     shader->setMat4("view", view, entity.getName());
     shader->setMat4("projection", projection, entity.getName());
 
-    shader->setVec3("baseColor", 0.3f, 0.8f, 0.8f);
-    shader->setVec3("lightPos", 3.0f, 5.0f, 3.0f);
-    shader->setVec3(
-        "viewPos",
-        camera.Position.x,
-        camera.Position.y,
-        camera.Position.z
-    );
-
     glm::mat4 entityTransform = entity.getModelMatrix();
+ 
+    // Render Mesh
+    if (entity.getRenderType() == RenderType::Mesh) {
+      glEnable(GL_DEPTH_TEST);
+      glDisable(GL_BLEND);
+      shader->setVec3("baseColor", 0.3f, 0.8f, 0.8f);
+
+      shader->setVec3("lightPos", 3.0f, 5.0f, 3.0f);
+      shader->setVec3(
+          "viewPos",
+          camera.Position.x,
+          camera.Position.y,
+          camera.Position.z
+      );
+    }
+    
+    // Render Gaussian
+    if (entity.getRenderType() == RenderType::Gaussian) {
+    }
+
 
     drawNode(
         entity.getRootNode(),
         entityTransform,
+        view, 
         shader
     );
 }
@@ -169,32 +180,48 @@ void Window::drawEntity(
 // -----------
 void Window::renderLoop(Scene& scene)
 {
-    while (!glfwWindowShouldClose(window)) {
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
+  while (!glfwWindowShouldClose(window)) {
+    // Smooth rendering across devices
+    float currentFrame = static_cast<float>(glfwGetTime());
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
 
-        processInput(window);
+    processInput(window);
 
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // Black background
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glm::mat4 projection = glm::perspective(
-            glm::radians(camera.Zoom),
-            static_cast<float>(width) / static_cast<float>(height),
-            0.1f,
-            100.0f
-        );
+    // Perspective projection
+    glm::mat4 projection = glm::perspective(
+        glm::radians(camera.Zoom),
+        static_cast<float>(width) / static_cast<float>(height),
+        0.1f,
+        100.0f
+    );
 
-        glm::mat4 view = camera.GetViewMatrix();
-
-        for (const Entity& entity : scene.getEntities()) {
-            drawEntity(entity, view, projection);
-        }
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+    // Camera
+    glm::mat4 view = camera.GetViewMatrix();
+    
+    // Render gaussian background
+    if(gaussianRenderer){
+      gaussianRenderer->render(view, projection);
     }
+
+    for (const Entity& entity : scene.getEntities()) {
+        drawEntity(entity, view, projection);
+    }
+
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+  }
+}
+
+// Gaussian Shader Hooligansss
+void Window::setGaussianRenderer(
+    const std::shared_ptr<GaussianBackgroundRenderer>& renderer
+) {
+    gaussianRenderer = renderer;
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
@@ -234,6 +261,72 @@ void Window::processInput(GLFWwindow *window) {
   if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) {
     isLeftButtonPressed = false;
     firstMouse = true;
+  }
+
+  // Render Modes for Gaussian Splat
+  if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+    if (!key1Pressed) {
+      if(gaussianRenderer){
+        gaussianRenderer->setMode(GaussianRenderMode::Points);
+      }
+      key1Pressed = true;
+      std::cout << "Gaussian mode: Points\n";
+    }
+  }
+  if (glfwGetKey(window, GLFW_KEY_1) == GLFW_RELEASE) {
+    key1Pressed = false;
+  }
+
+  if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+    if (!key2Pressed) {
+      if(gaussianRenderer){
+          gaussianRenderer->setMode(GaussianRenderMode::Quads);
+      }
+        key2Pressed = true;
+        std::cout << "Gaussian mode: BillboardQuads\n";
+      }
+  }
+  if (glfwGetKey(window, GLFW_KEY_2) == GLFW_RELEASE) {
+      key2Pressed = false;
+  }
+
+  if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
+    if (!key3Pressed) {
+      if(gaussianRenderer){
+        gaussianRenderer->setMode(GaussianRenderMode::CovarianceEllipses);
+      }
+      key3Pressed = true;
+      std::cout << "Gaussian mode: CovarianceEllipses\n";
+    }
+  }
+  if (glfwGetKey(window, GLFW_KEY_3) == GLFW_RELEASE) {
+      key3Pressed = false;
+  }
+ 
+  // Careful while using this ** Gaussians might contain millions of instances **
+  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS){
+      if(gaussianRenderer){
+        gaussianRenderer->getGaussianModel()->reloadAllGaussians();
+      }
+      std::cout << "Reloaded all the gaussians\n";
+    }
+  }
+  // if (glfwGetKey(window, GLFW_KEY_3) == GLFW_RELEASE) {
+  //     key3Pressed = false;
+  // }
+
+  if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+    if (!keyPPressed) {
+      if(gaussianRenderer){
+        gaussianRenderer->requestDepthSort();
+      }
+      keyPPressed = true;
+      std::cout << "Requested Gaussian depth sort\n";
+    }
+  }
+  if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE) {
+      keyPPressed = false;
   }
 }
 

@@ -21,6 +21,7 @@ add_executable(app
   src/main.cpp
   src/mujoco_robot_loader.cpp
   src/gaussian_splat_model.cpp
+  src/gaussian_background_renderer.cpp
 )
 
 # 3. Link Assimp to your executable alongside glfw and system libraries

@@ -11,7 +11,6 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include "model.hpp"
-#include "shader.hpp"
 #include "gaussian_splat_model.hpp"
 
 class Node : public std::enable_shared_from_this<Node> {
