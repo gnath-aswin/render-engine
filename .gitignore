@@ -50,3 +50,6 @@ temp/
 # Generated assets
 generated/
 resources/
+
+# Obsidian
+notes/Notes/
